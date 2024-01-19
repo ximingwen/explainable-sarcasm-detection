@@ -1,3 +1,8 @@
+# Multi-feature Explainable Sarcasm Detection
+
+
+Here the dataset is from this paper and please follow their instruction to generate the user features and disclosure features
+
 # CASCADE: Contextual Sarcasm Detection in Online Discussion Forums
 
 Code for the paper [CASCADE: Contextual Sarcasm Detection in Online Discussion Forums](http://aclweb.org/anthology/C18-1156) (COLING 2018, New Mexico).
@@ -147,8 +152,15 @@ If you use this code in your work then please cite the paper [CASCADE: Contextua
 }
 ```
 
+
 ## References
 
 [1]. Khodak, Mikhail, Nikunj Saunshi, and Kiran Vodrahalli. ["A large self-annotated corpus for sarcasm."](https://arxiv.org/abs/1704.05579) Proceedings of the Eleventh International Conference on Language Resources and Evaluation. 2018.
 
 [2]. Celli, Fabio, et al. ["Workshop on computational personality recognition (shared task)."](http://www.aaai.org/ocs/index.php/ICWSM/ICWSM13/paper/download/6190/6306) Proceedings of the Workshop on Computational Personality Recognition. 2013.
+
+
+
+After preparing all features. you could go into folder /src  to run all the current training files.
+
+The one training file now has over 0.8 accuracy and good prototypical diversity is all-feature-without-cnn.py 
