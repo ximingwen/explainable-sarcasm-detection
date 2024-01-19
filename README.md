@@ -3,15 +3,15 @@
 
 Here the dataset is from this paper and please follow their instruction to generate the user features and disclosure features
 
-# CASCADE: Contextual Sarcasm Detection in Online Discussion Forums
+## CASCADE: Contextual Sarcasm Detection in Online Discussion Forums
 
 Code for the paper [CASCADE: Contextual Sarcasm Detection in Online Discussion Forums](http://aclweb.org/anthology/C18-1156) (COLING 2018, New Mexico).
 
-## Description
+### Description
 
 In this paper, we propose a ContextuAl SarCasm DEtector (CASCADE), which adopts a hybrid approach of both content and context-driven modeling for sarcasm detection in online social media discussions (Reddit).
 
-## Requirements
+### Requirements
 
 1. Clone this repo.
 2. Python (2.7 or 3.3-3.6)  
@@ -21,7 +21,7 @@ In this paper, we propose a ContextuAl SarCasm DEtector (CASCADE), which adopts 
 6. Download the [`comments.json` dataset file](https://drive.google.com/file/d/1ew-85sh2z3fv1yGgIwBoeIHUvP8fMnxU/view?usp=sharing) [1] and place it in `data/`.
 7. If you want to run the Preprocessing steps (optional), install YAJL 2, download [the `train-balanced.csv` file](https://drive.google.com/file/d/18GwcTqXo_lcMJmc5ms6s2KaL0Dh-95GP/view), save it under `data/` and continue with the [Preprocessing instructions](#preprocessing). Otherwise, just download [user_gcca_embeddings.npz](https://drive.google.com/file/d/1mQoe_48LO67plyo98DVeCC9NabVXdm82/view?usp=sharing), place it in `users/user_embeddings/` and go directly to [Running CASCADE section](#running-cascade).
 
-## Preprocessing
+### Preprocessing
 
 <p align="center">
   <img src="cca.jpg" alt="User Embeddings" width="90%">
@@ -114,7 +114,7 @@ In this paper, we propose a ContextuAl SarCasm DEtector (CASCADE), which adopts 
     cd ..
     ```
 
-## Running CASCADE
+### Running CASCADE
 
 <p align="center">
   <img src="overall_model.jpg" alt="Hybrid CNN" width="90%">
@@ -130,7 +130,7 @@ python train_cascade.py
 
 The CNN codebase has been adapted from the [repo cnn-text-classification-tf from Denny Britz](https://github.com/dennybritz/cnn-text-classification-tf).
 
-## Citation
+### Citation
 
 If you use this code in your work then please cite the paper [CASCADE: Contextual Sarcasm Detection in Online Discussion Forums](http://aclweb.org/anthology/C18-1156) with the following:
 
@@ -153,7 +153,7 @@ If you use this code in your work then please cite the paper [CASCADE: Contextua
 ```
 
 
-## References
+### References
 
 [1]. Khodak, Mikhail, Nikunj Saunshi, and Kiran Vodrahalli. ["A large self-annotated corpus for sarcasm."](https://arxiv.org/abs/1704.05579) Proceedings of the Eleventh International Conference on Language Resources and Evaluation. 2018.
 
