@@ -2,14 +2,15 @@ import torch
 import torch.nn as nn
 from transformers import RobertaModel, RobertaTokenizer
 
-# Step 1: Load pre-trained Roberta model and tokenizer
-roberta_model = RobertaModel.from_pretrained('roberta-base')
-tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+
 
 # Step 2: Define Prototype Layer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+
+
 
 def make_variables(tf_name, k1, k2, initializer):
      
@@ -250,6 +251,33 @@ class PositionwiseFeedforwardLayer(nn.Module):
         return x
 
 
+# Example usage
+embedding_dim = 768
+num_layers = 6
+num_heads = 8
+model = TransformerWithClsToken(embedding_dim, num_layers, num_heads)
+input_embeddings = torch.randn(32, 10, embedding_dim)  # Example input (batch_size=32, seq_length=10)
+output = model(input_embeddings)
+
+
+class TransformerWithClsToken(nn.Module):
+    def __init__(self, embedding_dim, num_layers, num_heads):
+        super().__init__()
+       
+        self.transformer_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=num_heads),
+            num_layers=num_layers
+        )
+
+    def forward(self, x):
+        """
+        x: Tensor of shape [batch_size, seq_length, embedding_dim]
+        """
+        batch_size = x.size(0)
+        cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # replicate cls token for each item in the batch
+       
+        x = self.transformer_encoder(x)  # pass through the Transformer encoder
+        return x
 
 
 
@@ -258,10 +286,8 @@ class AttentionProto(nn.Module):
         super(AttentionProto, self).__init__()
         self.max_l = sequence_length
         self.l2_reg_lambda = l2_reg_lambda
-
-        # Embedding layer
         self.embedding = embedding_model
-      
+        self.cls_token = nn.Parameter(torch.randn(1, embedding_dim))
         self.num_filters = num_filters
         self.filter_sizes = filter_sizes
         self.k_protos = k_protos
@@ -270,6 +296,8 @@ class AttentionProto(nn.Module):
       
         self.dropout = nn.Dropout(1 - dropout_keep_prob)
         self.final_dense = nn.Linear(num_classes, activation="softmax")  # Add L2 regularization separately if needed
+        
+
 
     def init_prototypelayer(self, res_cents, user_cents):
         self.response_proto_layer = PrototypeLayer(self.k_protos, self.vect_size, res_cents)
@@ -284,15 +312,14 @@ class AttentionProto(nn.Module):
         sent_vect = self.res_distance_layer(full_distances)
 
         sent_proto_embedding = sent_proto*proto
+
+        sent_proto_embedding = torch.cat([self.cls_tokens, sent_proto_embedding], dim=1)  # concatenate cls token with input embeddings
         # Attention
 
         # z = [batch size, src len, hid dim]
 
         z = self.sent_proto_encoder(sent_proto_embedding, sent_proto_embedding)
-        
-        
-
-        
+             
         
         combined_vector_final = self.dropout(combined_vector_final)
         scores = self.final_dense(combined_vector_final)
