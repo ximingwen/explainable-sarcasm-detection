@@ -251,35 +251,6 @@ class PositionwiseFeedforwardLayer(nn.Module):
         return x
 
 
-# Example usage
-embedding_dim = 768
-num_layers = 6
-num_heads = 8
-model = TransformerWithClsToken(embedding_dim, num_layers, num_heads)
-input_embeddings = torch.randn(32, 10, embedding_dim)  # Example input (batch_size=32, seq_length=10)
-output = model(input_embeddings)
-
-
-class TransformerWithClsToken(nn.Module):
-    def __init__(self, embedding_dim, num_layers, num_heads):
-        super().__init__()
-       
-        self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=num_heads),
-            num_layers=num_layers
-        )
-
-    def forward(self, x):
-        """
-        x: Tensor of shape [batch_size, seq_length, embedding_dim]
-        """
-        batch_size = x.size(0)
-        cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # replicate cls token for each item in the batch
-       
-        x = self.transformer_encoder(x)  # pass through the Transformer encoder
-        return x
-
-
 
 class AttentionProtoNet(nn.Module):
     def __init__(self, sequence_length, num_classes, embedding_model, user_embeddings, topic_embeddings, embedding_size, filter_sizes, num_filters, l2_reg_lambda, dropout_keep_prob, k_protos, vect_size):
