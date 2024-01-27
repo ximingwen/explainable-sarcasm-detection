@@ -1,7 +1,9 @@
-  
 import torch
+import torch.nn as nn
+import torch.optim as optim
+import os
 from tqdm import tqdm
-from model
+from model import AttentionProtoNet
 #####################  GPU Configs  #################################
 
 # Selecting the GPU to work on
@@ -15,7 +17,7 @@ if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     
     # Initialize the argument parser
     parser = argparse.ArgumentParser()
@@ -124,30 +126,30 @@ if __name__ == "__main__":
     # Training
     # ==================================================
 
-    word_embedding_model = models.Transformer("roberta-large",max_seq_length=max_l )
+    # word_embedding_model = models.Transformer("roberta-large",max_seq_length=max_l )
 
-    pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),pooling_mode="mean")
+    # pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),pooling_mode="mean")
+    
+    # model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 
-    model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+
+    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+
    
 
     
 
     vect_size = 1024
 
-    ProtoCNN = TextCNN(
+    classifier = AttentionProtoNet(
         sequence_length=max_l,
         num_classes=len(y_train[0]) ,
         embedding_model = model,
-        user_embeddings = user_embeddings,
-        topic_embeddings = topic_embeddings,
-        embedding_size=args.embedding_dim,
-        filter_sizes=list(map(int, args.filter_sizes.split(","))),
-        num_filters=args.num_filters,
         l2_reg_lambda=args.l2_reg_lambda,
         dropout_keep_prob = args.dropout_keep_prob,
         k_protos = args.k_protos,
-        vect_size = vect_size)
+        vect_size = vect_size).to(device)
 
     
 
@@ -161,7 +163,7 @@ if __name__ == "__main__":
     sample_sentences_vects = []
     for i in range(300):
         batch = sample_sentences[i * 50:(i + 1) * 50]
-        vect = ProtoCNN.embed_res(batch)
+        vect = classifier.embed_res(batch)
       
         sample_sentences_vects.append(vect)
 
@@ -172,25 +174,23 @@ if __name__ == "__main__":
 
     
     sample_sentences_vect = np.concatenate(sample_sentences_vects, axis=0)
+    kmedoids = KMedoids(n_clusters=args.k_protos, random_state=0).fit(sample_sentences_vect)
+    sent_cents = kmedoids.cluster_centers_
     
     
-    ProtoCNN.init_prototypelayer(res_cents, user_cents)
+    classifier.init_prototypelayer(sent_cents)
 
 
     predictions = ProtoCNN([x_train[:2].tolist(), author_train[:2], topic_train[:2]])
 
  
  
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    import os
     
     # Define optimizer
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     
     # Define criterion (loss function)
-    criterion = nn.CrossEntropyLoss(reduction='sum')
+    criterion = torch.nn.BCEWithLogitsLoss()
     
     # Define metrics for training, validation, and test accuracy
     # In PyTorch, you typically calculate accuracy manually during the training loop,
@@ -208,9 +208,9 @@ if __name__ == "__main__":
         
     # Generate batches
 
-    train_loader = DataLoader(list(zip(x_train, author_train, topic_train, y_train)), batch_size=args.batch_size, shuffle=True)
-    dev_loader = DataLoader(list(zip(x_dev, author_dev, topic_dev, y_dev)), args.batch_size, shuffle = False)
-    test_loader = DataLoader(list(zip(test_x, author_test, topic_test, y_test)), args.batch_size, shuffle = False)
+    train_loader = DataLoader(list(zip(x_train, y_train)), batch_size=args.batch_size, shuffle=True)
+    dev_loader = DataLoader(list(zip(x_dev, y_dev)), args.batch_size, shuffle = False)
+    test_loader = DataLoader(list(zip(test_x, y_test)), args.batch_size, shuffle = False)
     # Training loop. For each batch...
 
     accumulation_steps = 30
@@ -246,22 +246,15 @@ if __name__ == "__main__":
         ProtoCNN.train()  # Set model to training mode
     
         for i, inputs in tqdm(enumerate(train_loader)):
-            x_batch, author_batch, topic_batch, y_batch = inputs
-            author_batch = torch.tensor(author_batch)
-            topic_batch = torch.tensor(topic_batch)
+            x_batch, y_batch = inputs
             y_batch = torch.tensor(y_batch)
     
-            # Set gradients of all model parameters to zero
-            optimizer.zero_grad()
+         
     
             # Forward pass
-            predictions, res_protos, user_protos = ProtoCNN(x_batch, author_batch, topic_batch)
+            predictions = AttentionProtoNet(x_batch)
     
-            acc_loss = criterion(predictions, y_batch)
-            res_div_loss = calculate_res_div_loss(res_protos, args.k_protos, args.scale, args.threshold)  # Implement this function based on your TensorFlow code
-            user_div_loss = calculate_user_div_loss(user_protos, args.k_protos, args.scale, args.threshold)  # Similarly, implement this function
-    
-            loss = acc_loss + args.l1 * res_div_loss + args.l2 * user_div_loss
+            loss = criterion(predictions, y_batch)
             epoch_loss += loss.item()
     
             # Backward pass and optimize
@@ -269,6 +262,7 @@ if __name__ == "__main__":
     
             # In PyTorch, gradients are accumulated by default, so you control this with optimizer steps
             if (i + 1) % accumulation_steps == 0 or i == len(train_loader) // args.batch_size - 1:
+                
                 optimizer.step()
                 optimizer.zero_grad()
     

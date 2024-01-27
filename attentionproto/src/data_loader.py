@@ -26,4 +26,4 @@ class DataLoader:
             start_index = batch_num * self.batch_size
             end_index = min((batch_num + 1) * self.batch_size, data_size)
             output = list(zip(*shuffled_data[start_index:end_index]))
-            yield output[0],  output[1],  output[2],  output[3]
+            yield output[0],  output[1]

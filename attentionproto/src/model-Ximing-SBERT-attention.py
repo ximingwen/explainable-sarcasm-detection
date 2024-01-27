@@ -9,7 +9,7 @@ from layer import PrototypeLayer, DistanceLayer, Encoder
 
 
 class AttentionProtoNet(nn.Module):
-    def __init__(self, sequence_length, num_classes, embedding_model, user_embeddings, topic_embeddings, embedding_size, filter_sizes, num_filters, l2_reg_lambda, dropout_keep_prob, k_protos, vect_size):
+    def __init__(self, sequence_length, num_classes, embedding_model, l2_reg_lambda, dropout_keep_prob, k_protos, vect_size):
         super(AttentionProto, self).__init__()
         self.max_l = sequence_length
         self.l2_reg_lambda = l2_reg_lambda
@@ -28,8 +28,8 @@ class AttentionProtoNet(nn.Module):
         
 
 
-    def init_prototypelayer(self, res_cents, user_cents):
-        self.proto_layer = PrototypeLayer(self.k_protos, self.vect_size, res_cents)
+    def init_prototypelayer(self, sent_cents):
+        self.proto_layer = PrototypeLayer(self.k_protos, self.vect_size, sent_cents)
 
     def sbert_attention_calculation(self, hidden_states):
        #hidden states expected to be Batch X Length X Hidden
@@ -46,7 +46,7 @@ class AttentionProtoNet(nn.Module):
        return alphas
 
 
-    def forward(self, input_content, input_author, input_topic):
+    def forward(self, input_content):
         
         x = self.embedding.encode(input_content)  # Adjust based on your embedding_model
 
