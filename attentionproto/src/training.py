@@ -74,8 +74,26 @@ if __name__ == "__main__":
     parser.add_argument("--scale", type=float, default = 5)
     parser.add_argument("--threshold", type=float, default = 0.8)
     
+    parser.add_argument("--num_of_sentence", type=int, default = 4)
+    parser.add_argument("--n_layers", type=int, default = 1)
+    parser.add_argument("--n_heads", type=int, default = 1)
+    parser.add_argument("--pf_dim", type=int, default = 2048)
+    parser.add_argument("--encoder_dropout", type=int, default = 0.1)
+    parser.add_argument("--device", type=int, default = 1)
+
+
+    
     # Parse the command-line arguments
     args = parser.parse_args()
+
+
+    
+    num_of_sentence = args.num_of_sentence
+    n_layers = args.n_layers
+    n_heads = args.n_heads
+    pf_dim = args.pf_dim
+    encoder_dropout = args.encoder_dropout
+    device = device
 
 
     out_dir = "/big/xw384/schoolwork/NLP+DEEP LEARNING/Project/CASCADE/src/runs/roberta-large-diverge-loss/"
@@ -155,7 +173,15 @@ if __name__ == "__main__":
         l2_reg_lambda=args.l2_reg_lambda,
         dropout_keep_prob = args.dropout_keep_prob,
         k_protos = args.k_protos,
-        vect_size = vect_size).to(device)
+        embedding_dim = vect_size,
+        num_of_sentence,
+        n_layers, 
+        n_heads, 
+        pf_dim, 
+        encoder_dropout,
+        device
+    
+    )
 
     # random.shuffle(x_text)
     sample_sentences = x_text[:15000]

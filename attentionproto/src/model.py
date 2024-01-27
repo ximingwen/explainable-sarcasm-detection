@@ -6,19 +6,19 @@ from layer import PrototypeLayer, DistanceLayer, Encoder
 
 
 class AttentionProtoNet(nn.Module):
-    def __init__(self, sequence_length, num_classes, embedding_model, user_embeddings, topic_embeddings, embedding_size, filter_sizes, num_filters, l2_reg_lambda, dropout_keep_prob, k_protos, vect_size):
+    def __init__(self, sequence_length, num_classes, embedding_model, l2_reg_lambda, dropout_keep_prob, k_protos, embedding_dim, num_of_sentence, n_layers, n_heads, pf_dim, encoder_dropout_device):
         super(AttentionProto, self).__init__()
         self.max_l = sequence_length
         self.l2_reg_lambda = l2_reg_lambda
         self.embedding = embedding_model
         #parameters for word-level attention
-        self.W_nu = nn.Parameter(torch.randn())
+        self.fc_word_level = torch.nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True)
+        self.W_nu = nn.Parameter(torch.randn(size=(embedding_dim, 1)))
         self.cls_token = nn.Parameter(torch.randn(1, embedding_dim))
-        self.num_filters = num_filters
-        self.filter_sizes = filter_sizes
+     
         self.k_protos = k_protos
         self.vect_size = vect_size
-        self.sent_proto_encoder = Encoder(input_dim, hid_dim, n_layers, n_heads, pf_dim, dropout, device, max_length=100)
+        self.sent_proto_encoder = Encoder(k_protos*num_of_sentence, self.vect_size, n_layers, n_heads, pf_dim, encoder_dropout, device, max_length=100)
       
         self.dropout = nn.Dropout(1 - dropout_keep_prob)
         self.final_dense = nn.Linear(num_classes, activation="softmax")  # Add L2 regularization separately if needed
