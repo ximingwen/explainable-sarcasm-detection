@@ -25,6 +25,10 @@ class AttentionProtoNet(nn.Module):
       
         self.dropout = nn.Dropout(1 - dropout_keep_prob)
         self.final_dense = nn.Linear(num_classes, activation="softmax")  # Add L2 regularization separately if needed
+
+        self.fc_word_level = torch.nn.Linear(in_features=self.hidden_shape, out_features=self.hidden_shape, bias=True)
+        self.W_nu = nn.Parameter(torch.randn(size=(self.hidden_shape, 1)))
+
         
 
 
@@ -80,7 +84,7 @@ class AttentionProtoNet(nn.Module):
 
                                   
 
-        return 
+        return scores
 
     def embed(self, x):
         # Embedding layer

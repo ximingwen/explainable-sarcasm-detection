@@ -4,6 +4,9 @@ import torch.optim as optim
 import os
 from tqdm import tqdm
 from model import AttentionProtoNet
+import numpy as np
+import pickle, argparse
+from sentence_transformers import SentenceTransformer, models
 #####################  GPU Configs  #################################
 
 # Function to calculate accuracy
@@ -148,7 +151,7 @@ if __name__ == "__main__":
     classifier = AttentionProtoNet(
         sequence_length=max_l,
         num_classes=len(y_train[0]) ,
-        embedding_model = model,
+        embedding_model = embedding_model,
         l2_reg_lambda=args.l2_reg_lambda,
         dropout_keep_prob = args.dropout_keep_prob,
         k_protos = args.k_protos,
