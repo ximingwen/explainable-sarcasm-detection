@@ -55,8 +55,8 @@ class DistanceLayer(nn.Module):
 
     def forward(self, full_distances):
         e_dist = self.e_func(full_distances) + 1e-8
-        dist_hot_vect = torch.squeeze(e_dist)
-        return dist_hot_vect
+        dist_vect = torch.squeeze(e_dist)
+        return dist_vect
 
 class Encoder(nn.Module):
     def __init__(
@@ -250,59 +250,4 @@ class PositionwiseFeedforwardLayer(nn.Module):
         return x
 
 
-
-
-
-class AttentionProto(nn.Module):
-    def __init__(self, sequence_length, num_classes, embedding_model, user_embeddings, topic_embeddings, embedding_size, filter_sizes, num_filters, l2_reg_lambda, dropout_keep_prob, k_protos, vect_size):
-        super(AttentionProto, self).__init__()
-        self.max_l = sequence_length
-        self.l2_reg_lambda = l2_reg_lambda
-
-        # Embedding layer
-        self.embedding = embedding_model
-      
-        self.num_filters = num_filters
-        self.filter_sizes = filter_sizes
-        self.k_protos = k_protos
-        self.vect_size = vect_size
-        self.sent_proto_encoder = (input_dim, hid_dim, n_layers, n_heads, pf_dim, dropout, device, max_length=100)
-      
-        self.dropout = nn.Dropout(1 - dropout_keep_prob)
-        self.final_dense = nn.Linear(num_classes, activation="softmax")  # Add L2 regularization separately if needed
-
-    def init_prototypelayer(self, res_cents, user_cents):
-        self.response_proto_layer = PrototypeLayer(self.k_protos, self.vect_size, res_cents)
-
-
-    def forward(self, input_content, input_author, input_topic):
-        
-        x = self.embedding.encode(input_content)  # Adjust based on your embedding_model
-
-        x = x.unsqueeze(0)
-        full_distances, res_protos = self.response_proto_layer(x)
-        sent_vect = self.res_distance_layer(full_distances)
-
-        sent_proto_embedding = sent_proto*proto
-        # Attention
-
-        # z = [batch size, src len, hid dim]
-
-        z = self.sent_proto_encoder(sent_proto_embedding, sent_proto_embedding)
-        
-        
-
-        
-        
-        combined_vector_final = self.dropout(combined_vector_final)
-        scores = self.final_dense(combined_vector_final)
-
-                                  
-
-        return 
-
-    def embed(self, x):
-        # Embedding layer
-        x = self.embedding.encode(x)  # Adjust based on how embedding_model is defined
-        return x
 
