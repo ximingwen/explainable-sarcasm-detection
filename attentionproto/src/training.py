@@ -6,6 +6,14 @@ from tqdm import tqdm
 from model import AttentionProtoNet
 #####################  GPU Configs  #################################
 
+# Function to calculate accuracy
+def calculate_accuracy(outputs, targets):
+    _, predicted = torch.max(outputs.data, 1)
+    total = targets.size(0)
+    correct = (predicted == targets).sum().item()
+    return 100 * correct / total
+
+
 # Selecting the GPU to work on
 if __name__ == "__main__":
     
@@ -135,11 +143,6 @@ if __name__ == "__main__":
 
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-
-   
-
-    
-
     vect_size = 1024
 
     classifier = AttentionProtoNet(
@@ -151,13 +154,6 @@ if __name__ == "__main__":
         k_protos = args.k_protos,
         vect_size = vect_size).to(device)
 
-    
-
- 
-
-
-
-
     # random.shuffle(x_text)
     sample_sentences = x_text[:15000]
     sample_sentences_vects = []
@@ -167,12 +163,7 @@ if __name__ == "__main__":
       
         sample_sentences_vects.append(vect)
 
-  
-
-
-
-
-    
+ 
     sample_sentences_vect = np.concatenate(sample_sentences_vects, axis=0)
     kmedoids = KMedoids(n_clusters=args.k_protos, random_state=0).fit(sample_sentences_vect)
     sent_cents = kmedoids.cluster_centers_
@@ -190,7 +181,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     
     # Define criterion (loss function)
-    criterion = torch.nn.BCEWithLogitsLoss()
+    criterion = criterion = nn.CrossEntropyLoss()
     
     # Define metrics for training, validation, and test accuracy
     # In PyTorch, you typically calculate accuracy manually during the training loop,
@@ -234,14 +225,8 @@ if __name__ == "__main__":
     
     for epoch in range(args.num_epochs):
         epoch_loss = 0
-        epoch_user_div_loss = 0
-        epoch_res_div_loss = 0
-        epoch_acc_loss = 0
-        accumulated_loss = 0
-    
-        # Reset accuracy calculation for each epoch
-        train_correct = 0
-        train_total = 0
+        total_correct = 0
+        total_samples = 0
     
         ProtoCNN.train()  # Set model to training mode
     
@@ -252,10 +237,11 @@ if __name__ == "__main__":
          
     
             # Forward pass
-            predictions = AttentionProtoNet(x_batch)
+            predictions = classifier(x_batch)
     
             loss = criterion(predictions, y_batch)
-            epoch_loss += loss.item()
+            loss = loss/accumulation_steps
+            epoch_loss += loss.item()* x_batch.size(0)
     
             # Backward pass and optimize
             loss.backward()
@@ -265,112 +251,56 @@ if __name__ == "__main__":
                 
                 optimizer.step()
                 optimizer.zero_grad()
-    
-            # Update training accuracy
-            _, predicted = torch.max(predictions.data, 1)
-            train_total += y_batch.size(0)
-            train_correct += (predicted == y_batch).sum().item()
-    
-            if (i + 1) % accumulation_steps == 0 or i == len(train_loader) // args.batch_size - 1:
                 print(f"Epoch: {epoch + 1}, Batch: {i + 1}/{len(train_loader)}, Loss: {epoch_loss / (args.batch_size * accumulation_steps)}, Accuracy: {train_correct / train_total}")
-    
-       
-        
-             accumulated_loss = 0
-               
-                
-            epoch_loss += loss
-            epoch_res_div_loss += res_div_loss
-            epoch_user_div_loss += user_div_loss
-            epoch_acc_loss += acc_loss
-                
+                accumulated_loss = 0
 
-         
 
-           
-    
-            print(f"Epoch: {epoch+1}, epoch Loss: {epoch_loss }  train accuracy:{train_accuracy_metric.result().numpy()}\n")
-            
-            train_loss.append(epoch_loss )
-            train_user_div_loss.append(epoch_user_div_loss)
-            train_res_div_loss.append(epoch_res_div_loss)
-            train_acc_loss.append(epoch_acc_loss)
-            train_acc.append(train_accuracy_metric.result().numpy())
-                
-                
+            # Update accuracy
+            correct, total = calculate_accuracy(outputs, targets)
+            total_correct += correct
+            total_samples += total
+
+        epoch_accuracy =  total_correct / total_samples
+        epoch_loss /= len(train_loader)
+        print(f"Epoch: {epoch+1}, epoch Loss: {epoch_loss }  train accuracy:{epoch_accuracy}\n")
         
-          
+        train_loss.append(epoch_loss )
+        train_acc.append(epoch_accuracy)
             
-            # Divide into batches
-            # dev_batches = data_helpers.batch_iter_dev(list(zip(x_dev, author_dev, topic_dev, y_dev)), args.batch_size)
-            # dev_loss = []
-            # ll = len(dev_batches)
-            # conf_mat = np.zeros((2,2))
-    
-            valid_loss = 0
-            valid_acc_loss = 0
-            valid_user_div_loss = 0
-            valid_res_div_loss = 0
-            valid_accuracy_metric.reset_state()
-    
-    
-            valid_loss = 0
-            valid_res_div_loss = 0
-            valid_user_div_loss = 0
-            valid_acc_loss = 0
-            valid_correct = 0
-            valid_total = 0
-            
-            ProtoCNN.eval()  # Set the model to evaluation mode
-            
-            with torch.no_grad():  # Disable gradient computation
-                for x_batch, author_batch, topic_batch, y_batch in tqdm(dev_loader):
-                    # Convert batches to PyTorch tensors
-                    author_batch = torch.tensor(author_batch)
-                    topic_batch = torch.tensor(topic_batch)
-                    y_batch = torch.tensor(y_batch)
-            
-                    # Forward pass
-                    predictions, res_protos, user_protos = ProtoCNN(x_batch, author_batch, topic_batch)
-            
-                    # Compute accuracy loss
-                    acc_loss = criterion(predictions, y_batch)
-                    
-                    # Compute diversity loss for resource prototypes
-                    res_div_loss = calculate_div_loss(res_protos, args.k_protos, args.scale, args.threshold)  # Implement this function based on your TensorFlow code
-            
-                    # Compute diversity loss for user prototypes
-                    user_div_loss = calculate_div_loss(user_protos, args.k_protos, args.scale, args.threshold)  # Implement this function
-            
-                    # Compute total loss
-                    loss = acc_loss + args.l1 * res_div_loss + args.l2 * user_div_loss
-            
-                    valid_loss += loss.item()
-                    valid_res_div_loss += res_div_loss.item()
-                    valid_user_div_loss += user_div_loss.item()
-                    valid_acc_loss += acc_loss.item()
-            
-                    # Update validation accuracy
-                    _, predicted = torch.max(predictions.data, 1)
-                    valid_total += y_batch.size(0)
-                    valid_correct += (predicted == y_batch).sum().item()
+
+        valid_loss = 0
+        total_correct = 0
+        total_samples = 0
+        
+        ProtoCNN.eval()  # Set the model to evaluation mode
+        
+        with torch.no_grad():  # Disable gradient computation
+            for x_batch, y_batch in tqdm(dev_loader):
+                # Convert batches to PyTorch tensors
+                y_batch = torch.tensor(y_batch)
+        
+                # Forward pass
+                predictions = classifier(x_batch)
+        
+                # Compute accuracy loss
+                loss = criterion(predictions, y_batch)
+                
+                valid_loss += loss.item() * x_batch.size(0)     
+        
+                # Update validation accuracy
+                correct, total = calculate_accuracy(predictions, y_batch)
+                total_correct += correct
+                total_samples += total
             
             # Calculate average losses and accuracy
             valid_loss /= len(dev_loader)
-            valid_res_div_loss /= len(dev_loader)
-            valid_user_div_loss /= len(dev_loader)
-            valid_acc_loss /= len(dev_loader)
-            valid_accuracy = valid_correct / valid_total
-            
-            print(f"Validation Loss: {valid_loss}, Res Div Loss: {valid_res_div_loss}, User Div Loss: {valid_user_div_loss}, Acc Loss: {valid_acc_loss}, Accuracy: {valid_accuracy}")
+            valid_accuracy = total_correct / total_samples
+          
     
             dev_loss.append(valid_loss)
-            dev_user_div_loss.append(valid_user_div_loss)
-            dev_res_div_loss.append(valid_res_div_loss)
-            dev_acc_loss.append(valid_acc_loss)
-            dev_acc.append(valid_accuracy_metric.result().numpy())   
+            dev_acc.append(valid_accuracy)   
             print(
-                f"Epoch: {epoch + 1}, Valid Loss: {valid_loss}  valid accuracy:{valid_accuracy_metric.result().numpy()}")
+                f"Epoch: {epoch + 1}, Valid Loss: {valid_loss}  valid accuracy:{valid_accuracy}\n")
 
     
 
@@ -383,22 +313,25 @@ if __name__ == "__main__":
             
             
           
-           
-                test_accuracy_metric.reset_state()
-                for x_batch, author_batch, topic_batch, y_batch in tqdm(test_loader):
-    
-                   
-                    author_batch = np.asarray(author_batch)
-                    topic_batch = np.asarray(topic_batch)
-                    y_batch = np.asarray(y_batch)
+                total_correct = 0
+                total_samples = 0
+                with torch.no_grad(): 
+                    for x_batch, author_batch, topic_batch, y_batch in tqdm(test_loader):
         
-                    #predictions, _, _ = ProtoCNN([x_batch, author_batch, topic_batch], training=False)
-                    predictions, res_protos, user_protos  = ProtoCNN([x_batch, author_batch, topic_batch], training=False)
-                    test_accuracy_metric.update_state(y_batch, predictions)
-        
-        
-               
-                test_acc.append((epoch+1, test_accuracy_metric.result().numpy()))
+                       
+                        author_batch = np.asarray(author_batch)
+                        topic_batch = np.asarray(topic_batch)
+                        y_batch = np.asarray(y_batch)
+            
+                        #predictions, _, _ = ProtoCNN([x_batch, author_batch, topic_batch], training=False)
+                        predictions = classifier(x_batch)
+                        correct, total = calculate_accuracy(predictions, y_batch)
+                        total_correct += correct
+                        total_samples += total
+            
+            
+                test_accuracy = total_correct / total_samples
+                test_acc.append((epoch+1, test_accuracy))
     
                 print(f"Epoch: {epoch + 1},   test accuracy:{test_accuracy_metric.result().numpy()}")
     
