@@ -6,8 +6,8 @@ from layer import PrototypeLayer, DistanceLayer, Encoder
 
 
 class AttentionProtoNet(nn.Module):
-    def __init__(self, sequence_length, num_classes, embedding_model, l2_reg_lambda, dropout_keep_prob, k_protos, embedding_dim, num_of_sentence, n_layers, n_heads, pf_dim, encoder_dropout_device):
-        super(AttentionProto, self).__init__()
+    def __init__(self, sequence_length, num_classes, embedding_model, l2_reg_lambda, dropout_keep_prob, k_protos, embedding_dim, num_of_sentence, n_layers, n_heads, pf_dim, encoder_dropout, device):
+        super(AttentionProtoNet, self).__init__()
         self.max_l = sequence_length
         self.l2_reg_lambda = l2_reg_lambda
         self.embedding = embedding_model

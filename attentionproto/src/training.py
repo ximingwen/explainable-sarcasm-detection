@@ -174,14 +174,12 @@ if __name__ == "__main__":
         dropout_keep_prob = args.dropout_keep_prob,
         k_protos = args.k_protos,
         embedding_dim = vect_size,
-        num_of_sentence,
-        n_layers, 
-        n_heads, 
-        pf_dim, 
-        encoder_dropout,
-        device
-    
-    )
+        num_of_sentence = num_of_sentence,
+        n_layers = n_layers, 
+        n_heads = n_heads, 
+        pf_dim = pf_dim, 
+        encoder_dropout = encoder_dropout,
+        device = device)
 
     # random.shuffle(x_text)
     sample_sentences = x_text[:15000]
