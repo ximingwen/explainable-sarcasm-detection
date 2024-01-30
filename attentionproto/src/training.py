@@ -5,8 +5,12 @@ import os
 from tqdm import tqdm
 from model import AttentionProtoNet
 import numpy as np
-import pickle, argparse
-from sentence_transformers import SentenceTransformer, models
+import pickle, argparse, json
+# from sentence_transformers import SentenceTransformer, models
+from sklearn_extra.cluster import KMedoids
+from transformers import AutoTokenizer, AutoModel
+from data_loader import custom_collate_fn, SarcasmDetection
+from torch.utils.data import DataLoader
 #####################  GPU Configs  #################################
 
 # Function to calculate accuracy
@@ -79,7 +83,8 @@ if __name__ == "__main__":
     parser.add_argument("--n_heads", type=int, default = 1)
     parser.add_argument("--pf_dim", type=int, default = 2048)
     parser.add_argument("--encoder_dropout", type=int, default = 0.1)
-    parser.add_argument("--device", type=int, default = 1)
+    parser.add_argument("--device", type=str, default ="cuda:0")
+    parser.add_argument("--language_model", type=str, default ="roberta-base")
 
 
     
@@ -93,10 +98,12 @@ if __name__ == "__main__":
     n_heads = args.n_heads
     pf_dim = args.pf_dim
     encoder_dropout = args.encoder_dropout
-    device = device
+    device = args.device
+    language_model = args.language_model
+    batch_size = args.batch_size
 
 
-    out_dir = "/big/xw384/schoolwork/NLP+DEEP LEARNING/Project/CASCADE/src/runs/roberta-large-diverge-loss/"
+    out_dir = "./output/"
 
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
@@ -106,31 +113,27 @@ if __name__ == "__main__":
 
     
     print("loading data...")
-    x = pickle.load(open("./mainbalancedpickle.p","rb"))
-    revs, W, W2, word_idx_map, vocab, max_l = x[0], x[1], x[2], x[3], x[4], x[5]
+    revs = pickle.load(open("./mainbalancedpickle-new.p","rb"))
+    
     print("data loaded!")# Load data
     
    
     
-    max_l = 100
-    
     x_text = []
     y = []
     
-    test_x = []
-    test_y = []
+    x_test = []
+    y_test = []
     
     for i in range(len(revs)):
         if revs[i]['split']==1:
-            x_text.append(revs[i]['text'])
+            x_text.append(revs[i]['combined'])
             y.append(revs[i]['label'])
         else:
-            test_x.append(revs[i]['text'])
-            test_y.append(revs[i]['label'])  
+            x_test.append(revs[i]['combined'])
+            y_test.append(revs[i]['label'])  
     
  
-    y_test = test_y
-  
     
     shuffle_indices = np.random.permutation(np.arange(len(y)))
     x_shuffled = np.asarray(x_text)[shuffle_indices]
@@ -149,63 +152,83 @@ if __name__ == "__main__":
     
     x_train = np.asarray(x_train)
     x_dev = np.asarray(x_dev)
+    x_test = np.array(x_test)
     y_train = np.asarray(y_train)
     y_dev = np.asarray(y_dev)
+    y_test = np.array(y_test)
+    
+    
   
     # Training
-    # ==================================================
+   
 
-    # word_embedding_model = models.Transformer("roberta-large",max_seq_length=max_l )
+    print(language_model)
 
-    # pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),pooling_mode="mean")
+    # Create Dataset
+    train_dataset = SarcasmDetection(x_train, y_train, language_model)
+    dev_dataset = SarcasmDetection(x_dev, y_dev, language_model)
+    test_dataset = SarcasmDetection(x_test, y_test, language_model)
+
+
+    # Create DataLoader
+
+   
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, collate_fn=custom_collate_fn)  
+    dev_loader = DataLoader(dev_dataset, batch_size=batch_size, collate_fn=custom_collate_fn)  
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, collate_fn=custom_collate_fn)
+
+
     
-    # model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
-
-
-    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-
-    vect_size = 1024
+    vect_size = 384
 
     classifier = AttentionProtoNet(
-        sequence_length=max_l,
+        sequence_length=100,
         num_classes=len(y_train[0]) ,
-        embedding_model = embedding_model,
+        embedding_model = language_model,
         l2_reg_lambda=args.l2_reg_lambda,
         dropout_keep_prob = args.dropout_keep_prob,
         k_protos = args.k_protos,
-        embedding_dim = vect_size,
+        embedding_dim = 768,
         num_of_sentence = num_of_sentence,
         n_layers = n_layers, 
         n_heads = n_heads, 
         pf_dim = pf_dim, 
         encoder_dropout = encoder_dropout,
-        device = device)
-
-    # random.shuffle(x_text)
-    sample_sentences = x_text[:15000]
+        device = device).to(device)
+    
+    
     sample_sentences_vects = []
-    for i in range(300):
-        batch = sample_sentences[i * 50:(i + 1) * 50]
-        vect = classifier.embed_res(batch)
-      
+    datapoint = 0
+    for i, inputs in tqdm(enumerate(train_loader)):
+        x_batch, y_batch = inputs
+        vect = classifier.embed(x_batch).detach().cpu().numpy()
         sample_sentences_vects.append(vect)
+        datapoint+=batch_size
 
- 
-    sample_sentences_vect = np.concatenate(sample_sentences_vects, axis=0)
+        if datapoint>150:
+            break
+
+    
+
+    # # random.shuffle(x_text)
+    # sample_sentences = x_text[:50]
+    # sample_sentences_vects = []
+    # for i in range(1):
+    #     batch = sample_sentences[i * 50:(i + 1) * 50]
+    #     vect = classifier.embed(batch)
+    #     sample_sentences_vects.append(vect)
+
+  
+    sample_sentences_vect = np.vstack(sample_sentences_vects)
+    print(sample_sentences_vect.shape)
     kmedoids = KMedoids(n_clusters=args.k_protos, random_state=0).fit(sample_sentences_vect)
     sent_cents = kmedoids.cluster_centers_
     
     
     classifier.init_prototypelayer(sent_cents)
-
-
-    predictions = ProtoCNN([x_train[:2].tolist(), author_train[:2], topic_train[:2]])
-
- 
- 
     
     # Define optimizer
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(classifier.parameters(), lr=1e-4)
     
     # Define criterion (loss function)
     criterion = criterion = nn.CrossEntropyLoss()
@@ -224,11 +247,7 @@ if __name__ == "__main__":
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
         
-    # Generate batches
-
-    train_loader = DataLoader(list(zip(x_train, y_train)), batch_size=args.batch_size, shuffle=True)
-    dev_loader = DataLoader(list(zip(x_dev, y_dev)), args.batch_size, shuffle = False)
-    test_loader = DataLoader(list(zip(test_x, y_test)), args.batch_size, shuffle = False)
+   
     # Training loop. For each batch...
 
     accumulation_steps = 30
@@ -251,11 +270,12 @@ if __name__ == "__main__":
 
     
     for epoch in range(args.num_epochs):
+        
         epoch_loss = 0
         total_correct = 0
         total_samples = 0
     
-        ProtoCNN.train()  # Set model to training mode
+        classifier.train()  # Set model to training mode
     
         for i, inputs in tqdm(enumerate(train_loader)):
             x_batch, y_batch = inputs

@@ -16,7 +16,7 @@ class AttentionProtoNet(nn.Module):
         self.embedding = embedding_model
         #parameters for word-level attention
         self.W_nu = nn.Parameter(torch.randn())
-        self.cls_token = nn.Parameter(torch.randn(1, embedding_dim))
+        self.cls_token = torch.ini
         self.num_filters = num_filters
         self.filter_sizes = filter_sizes
         self.k_protos = k_protos
@@ -64,8 +64,8 @@ class AttentionProtoNet(nn.Module):
         x= torch.stack(all_S, dim=0) #batch*num_of_sentence_*embedding_dim
  
         x = x.unsqueeze(0)
-        full_distances, protos = self.response_proto_layer(x) #batch*num_of_sentence
-        sent_vect = self.res_distance_layer(full_distances) #batch*num_of_sentence
+        full_distances, protos = self.response_proto_layer(x) # batch*num_of_sentence * num_of_token
+        sent_proto = self.res_distance_layer(full_distances) #batch*num_of_sentence
 
         sent_proto_embedding = sent_proto*protos 
 
@@ -80,11 +80,11 @@ class AttentionProtoNet(nn.Module):
              
         
         combined_vector_final = self.dropout(combined_vector_final)
-        scores = self.final_dense(combined_vector_final)
+        output = self.final_dense(combined_vector_final)
 
                                   
 
-        return scores
+        return output
 
     def embed(self, x):
         # Embedding layer

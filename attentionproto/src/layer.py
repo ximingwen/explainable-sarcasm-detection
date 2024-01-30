@@ -26,21 +26,32 @@ def tight_pos_sigmoid_offset(x, offset, threshold, e=2.7182818284590452353602874
     return 1 / (1 + tf.math.pow(e, (1 * (offset * x - threshold))))
 
 
-class PrototypeLayer(nn.Module):
-    def __init__(self, k_protos, vect_size, k_cents):
+class PrototypeLayer(nn.Module): # batch_size * num_of*setence * dim
+    def __init__(self, k_protos, vect_size, k_cents,device):
         super(PrototypeLayer, self).__init__()
         self.n_protos = k_protos
         self.vect_size = vect_size
-        self.prototypes = nn.Parameter(torch.tensor(k_cents, dtype=torch.float32))
+        self.prototypes = nn.Parameter(torch.tensor(k_cents, dtype=torch.float32)).to(device)
 
     def forward(self, inputs):
-        # Expand input tensor and prototypes tensor for broadcasting
-        tmp1 = inputs.unsqueeze(2)
-        tmp1 = tmp1.expand(-1, -1, self.n_protos, self.vect_size)
-        tmp2 = self.prototypes.expand(inputs.size(0), -1, self.n_protos, self.vect_size)
+        batch_size, num_of_sentence, dim = inputs.size()
+        # # Expand input tensor and prototypes tensor for broadcasting
+        # tmp1 = inputs.unsqueeze(2)
+        # tmp1 = tmp1.expand(-1, -1, self.n_protos, self.vect_size)
+        # tmp2 = self.prototypes.expand(inputs.size(0), -1, self.n_protos, self.vect_size)
         
+        # # Calculate squared Euclidean distance
+        # distances = torch.sum((tmp1 - tmp2) ** 2, dim=3)
+
+        # Expand input tensor and prototypes tensor for broadcasting
+        tmp1 = inputs.unsqueeze(3)  # Add a dimension for prototypes   batch_size, num_of_sent,sent_dim,1
+        tmp1 = tmp1.expand(-1, -1, -1, self.n_protos)  # Shape: [batch_size, num_of_sentence, sentence_dim, n_protos]
+        
+        tmp2 = self.prototypes.unsqueeze(0).unsqueeze(0)  # Add dimensions for batch and sentence   1,1,n_protos,dim
+        tmp2 = tmp2.expand(batch_size, num_of_sentence, -1, -1)  # Shape: [batch_size, num_of_sentence, n_protos, sentence_dim]
         # Calculate squared Euclidean distance
-        distances = torch.sum((tmp1 - tmp2) ** 2, dim=3)
+       
+        distances = torch.sum((tmp1 - tmp2.permute(0, 1, 3, 2)) ** 2, dim=2)  # Shape: [batch_size, num_of_sentence, n_protos]
         return distances, self.prototypes
 
 
@@ -61,20 +72,18 @@ class DistanceLayer(nn.Module):
 class Encoder(nn.Module):
     def __init__(
         self,
-        input_dim,
         hid_dim,
         n_layers,
         n_heads,
         pf_dim,
         dropout,
         device,
-        max_length=100,
+        max_length,
     ):
         super().__init__()
 
         self.device = device
 
-        self.tok_embedding = nn.Embedding(input_dim, hid_dim)
         self.pos_embedding = nn.Embedding(max_length, hid_dim)
 
         self.layers = nn.ModuleList(
@@ -103,7 +112,7 @@ class Encoder(nn.Module):
         # pos = [batch size, src len]
 
         src = self.dropout(
-            (self.tok_embedding(src) * self.scale) + self.pos_embedding(pos)
+            (src * self.scale) + self.pos_embedding(pos)
         )
 
         # src = [batch size, src len, hid dim]
@@ -112,6 +121,7 @@ class Encoder(nn.Module):
             src = layer(src, src_mask)
 
         # src = [batch size, src len, hid dim]
+        
 
         return src
 
@@ -196,9 +206,15 @@ class MultiHeadAttentionLayer(nn.Module):
         # K = [batch size, n heads, key len, head dim]
         # V = [batch size, n heads, value len, head dim]
 
+        print(Q.shape)
+
         energy = torch.matmul(Q, K.permute(0, 1, 3, 2)) / self.scale
 
         # energy = [batch size, n heads, query len, key len]
+
+        print(energy.shape) #60, 1, 65, 65
+        print(mask.shape) # [60, 65]
+     
 
         if mask is not None:
             energy = energy.masked_fill(mask == 0, -1e10)
