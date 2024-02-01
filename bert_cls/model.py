@@ -1,4 +1,7 @@
-
+#actor:NJUST_Tang Bin
+#@file: model
+#@time: 2021/12/28 17:17
+#-*-coding:UTF-8-*-
 from torch import nn
 import torch
 from transformers.models.bert.modeling_bert import BertModel,BertPreTrainedModel,BertSelfAttention
@@ -23,7 +26,7 @@ class BertPooler(nn.Module):
 
 class BertTorchClassfication(BertPreTrainedModel):
     '''
-    Bert CLS Model
+    通用文本分类模型
     '''
     base_model_prefix = "bert"
 
@@ -31,6 +34,8 @@ class BertTorchClassfication(BertPreTrainedModel):
         super(BertTorchClassfication, self).__init__(config)
         self.bert=BertModel(config)
         self.pooler=BertPooler(config)
+        self.cls=nn.Linear(config.hidden_size,2)
+        self.softmax=nn.Softmax()
         self.bert_attention=BertSelfAttention(config)
 
     def forward(self,input_ids=None,attention_mask=None,token_type_ids=None,labels=None,position_ids=None,
@@ -61,6 +66,18 @@ class BertTorchClassfication(BertPreTrainedModel):
         extra_attention=torch.mean(extra_attention_output.float(),dim=1)#将得到的attention做平均
         output=torch.cat((pooled_output,extra_attention),dim=1)#将tensor拼接
         '''
+        prediction_scores=self.cls(pooled_output)
+        prediction_scores=self.softmax(prediction_scores)
+        prediction_label=torch.argmax(prediction_scores,dim=1)
+        outputs=(prediction_scores,prediction_label,)
+
+        if labels is not None:
+            #如果样本不均衡，这里可以将小样本的权重设置大一点
+            #loss_fct=CrossEntropyLoss(weight=torch.from_numpy(np.array([1,8])).float().to(device))
+            loss_fct=CrossEntropyLoss()#交叉熵损失函数
+            loss=loss_fct(prediction_scores.view(-1,2),labels.view(-1))#将softmax概率分布修改维度，并使用交叉熵计算softmax概率分布和真实标签之间的差异
+            outputs=(loss,)+outputs
+        return outputs
 
 
 
