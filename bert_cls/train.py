@@ -1,4 +1,7 @@
-
+#actor:NJUST_Tang Bin
+#@file: train
+#@time: 2021/12/29 16:09
+#-*-coding:UTF-8-*-
 import torch
 import os
 import json
@@ -8,7 +11,7 @@ import argparse
 import logging
 from transformers import BertTokenizer,BertConfig
 from model import BertTorchClassfication
-from data_set import SacasamDetection,collate_func
+from data_set import TextClassfication,collate_func
 from torch.utils.data import DataLoader,RandomSampler,SequentialSampler
 from transformers import AdamW,get_linear_schedule_with_warmup
 from tqdm import tqdm,trange
@@ -36,7 +39,7 @@ def train(model,device,tokenizer,args):
     if args.gradient_accumulation_steps<1:
         raise ValueError('梯度积累参数无效，必须大于等于1')
     train_batch_size=int(args.train_batch_size/args.gradient_accumulation_steps)
-    train_data=SacasamDetection(tokenizer,args.max_len,args.data_dir,"train_sacasam_detection",path_file=args.train_file_path)
+    train_data=TextClassfication(tokenizer,args.max_len,args.data_dir,"train_text_classification",path_file=args.train_file_path)
     train_sampler=RandomSampler(train_data)
     train_data_loader=DataLoader(train_data,
                                  sampler=train_sampler,
@@ -44,8 +47,8 @@ def train(model,device,tokenizer,args):
                                  collate_fn=collate_func)
     total_steps=int(len(train_data_loader)*args.num_train_epochs/args.gradient_accumulation_steps)
 
-    dev_data=SacasamDetection(tokenizer,args.max_len,args.data_dir,"dev_sacasam_detection",path_file=args.dev_file_path)
-    test_data = SacasamDetection(tokenizer, args.max_len, args.data_dir, "test_sacasam_detection",path_file=args.test_file_path)
+    dev_data=TextClassfication(tokenizer,args.max_len,args.data_dir,"dev_text_classfication",path_file=args.dev_file_path)
+    test_data = TextClassfication(tokenizer, args.max_len, args.data_dir, "test_text_classfication",path_file=args.test_file_path)
     logging.info("总训练步数为：{}".format(total_steps))
     model.to(device)
     #获取模型所有参数，选择不想权重衰减的参数
@@ -200,8 +203,8 @@ def set_args():
     parser.add_argument('--train_file_path',default='data/train.txt',type=str,help='训练数据')
     parser.add_argument('--dev_file_path', default='data/dev.txt', type=str, help='验证数据')
     parser.add_argument('--test_file_path', default='data/test.txt', type=str, help='测试数据')
-    parser.add_argument('--vocab_path', default='pre_train_model/vocab.txt', type=str, help='预训练模型字典数据')
-    parser.add_argument('--pretrained_model_path', default='pre_train_model/pytorch_model.bin', type=str, help='预训练模型路径')
+    parser.add_argument('--vocab_path', default='pre_train_model/sci-uncased/vocab.txt', type=str, help='预训练模型字典数据')
+    parser.add_argument('--pretrained_model_path', default='pre_train_model/bert_wwm_ext_chinese/', type=str, help='预训练模型路径')
     parser.add_argument('--data_dir', default='cached/', type=str, help='缓存数据的存放路径')
     parser.add_argument('--num_train_epochs', default=10, type=int, help='模型训练的轮数')
     parser.add_argument('--train_batch_size', default=128, type=int, help='训练时每个batch的大小')
