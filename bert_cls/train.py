@@ -1,7 +1,4 @@
-#actor:NJUST_Tang Bin
-#@file: train
-#@time: 2021/12/29 16:09
-#-*-coding:UTF-8-*-
+
 import torch
 import os
 import json
@@ -10,11 +7,12 @@ import numpy as np
 import argparse
 import logging
 from transformers import BertTokenizer,BertConfig
-from model import BertTorchClassfication
-from data_set import TextClassfication,collate_func
+from model import Bert_Prototype
+from data_set import SacasamDetection,collate_func
 from torch.utils.data import DataLoader,RandomSampler,SequentialSampler
 from transformers import AdamW,get_linear_schedule_with_warmup
 from tqdm import tqdm,trange
+from torch.nn import CrossEntropyLoss
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -39,7 +37,7 @@ def train(model,device,tokenizer,args):
     if args.gradient_accumulation_steps<1:
         raise ValueError('梯度积累参数无效，必须大于等于1')
     train_batch_size=int(args.train_batch_size/args.gradient_accumulation_steps)
-    train_data=TextClassfication(tokenizer,args.max_len,args.data_dir,"train_text_classification",path_file=args.train_file_path)
+    train_data=SacasamDetection(tokenizer,args.max_len,args.data_dir,"train_sacasam_detection",path_file=args.train_file_path)
     train_sampler=RandomSampler(train_data)
     train_data_loader=DataLoader(train_data,
                                  sampler=train_sampler,
@@ -47,8 +45,8 @@ def train(model,device,tokenizer,args):
                                  collate_fn=collate_func)
     total_steps=int(len(train_data_loader)*args.num_train_epochs/args.gradient_accumulation_steps)
 
-    dev_data=TextClassfication(tokenizer,args.max_len,args.data_dir,"dev_text_classfication",path_file=args.dev_file_path)
-    test_data = TextClassfication(tokenizer, args.max_len, args.data_dir, "test_text_classfication",path_file=args.test_file_path)
+    dev_data=SacasamDetection(tokenizer,args.max_len,args.data_dir,"dev_sacasam_detection",path_file=args.dev_file_path)
+    test_data = SacasamDetection(tokenizer, args.max_len, args.data_dir, "test_sacasam_detection",path_file=args.test_file_path)
     logging.info("总训练步数为：{}".format(total_steps))
     model.to(device)
     #获取模型所有参数，选择不想权重衰减的参数
@@ -92,11 +90,11 @@ def train(model,device,tokenizer,args):
             attention_mask=batch["attention_mask"].to(device)
             position_ids=batch["position_ids"].to(device)
             labels=batch["labels"].to(device)
-            outputs=model.forward(input_ids=input_ids,
+            outputs, prototype_loss = model.forward(input_ids=input_ids,
                                   attention_mask=attention_mask,
                                   token_type_ids=token_type_ids,
                                   labels=labels)
-            loss=outputs[0]
+            loss=CrossEntropyLoss(outputs,labels) + prototype_loss
             tr_loss+=loss.item()
             iter_bar.set_description("Iter (loss=%5.3f)"%loss.item())
             #判断是否进行梯度积累，如果进行，则将损失值除以累积步数，每隔多少步更新一次参数
@@ -199,13 +197,12 @@ def evaluate(model,device,dev_data,args):
 
 def set_args():
     parser=argparse.ArgumentParser()#创建一个解析器
+    # 训练参数
     parser.add_argument('--device',default='-1',type=str,help='设置训练或测试时使用的显卡')
-    parser.add_argument('--train_file_path',default='data/train.txt',type=str,help='训练数据')
-    parser.add_argument('--dev_file_path', default='data/dev.txt', type=str, help='验证数据')
-    parser.add_argument('--test_file_path', default='data/test.txt', type=str, help='测试数据')
-    parser.add_argument('--vocab_path', default='pre_train_model/sci-uncased/vocab.txt', type=str, help='预训练模型字典数据')
-    parser.add_argument('--pretrained_model_path', default='pre_train_model/bert_wwm_ext_chinese/', type=str, help='预训练模型路径')
-    parser.add_argument('--data_dir', default='cached/', type=str, help='缓存数据的存放路径')
+    parser.add_argument('--train_file_path',default='./SemEval2022/train/train.En.csv',type=str,help='训练数据')
+    parser.add_argument('--dev_file_path', default='./SemEval2022/dev/dev.En.csv', type=str, help='验证数据')
+    parser.add_argument('--test_file_path', default='./SemEval2022/test/task_A_En_test.csv', type=str, help='测试数据')
+    parser.add_argument('--data_dir', default='./cached/', type=str, help='缓存数据的存放路径')
     parser.add_argument('--num_train_epochs', default=10, type=int, help='模型训练的轮数')
     parser.add_argument('--train_batch_size', default=128, type=int, help='训练时每个batch的大小')
     parser.add_argument('--test_batch_size', default=128, type=int, help='测试时每个batch的大小')
@@ -219,7 +216,27 @@ def set_args():
     parser.add_argument('--output_dir', default='model_output/', type=str, help='模型输出路径')
     parser.add_argument('--seed', default=2022, type=int, help='随机种子')
     parser.add_argument('--max_len', default=512, type=int, help='输入模型的文本的最大长度')
-    return parser.parse_args()#调用parse_args方法解析参数
+    
+    # 模型参数
+    parser.add_argument('--bert_model_path', default='./bert_cls_V0/pre_train_model/.git/pytorch_model.bin', type=str, help='预训练模型路径')
+    parser.add_argument('--bert_config', default='./bert_cls_V0/pre_train_model/.git/config.json', type=str, help='预训练模型配置文件')
+    parser.add_argument('--vocab_path', default='./bert_cls_V0/pre_train_model/.git/vocab.txt', type=str, help='预训练模型字典数据')
+    parser.add_argument('--bert_cls_dim', default=768, type=int, help='BERT模型的输出维度')
+    parser.add_argument('--prototype_dim', default=256, type=int, help='原型层的维度')
+    parser.add_argument('--num_prototypes', default=10, type=int, help='原型的数量')
+    parser.add_argument('--prototype_threshold', default=0.5, type=float, help='原型阈值')
+    parser.add_argument('--prototype_loss_weights', default='{"diversity_loss_z_p": 0.1, "diversity_loss_p_z": 0.1, "diversity_loss_p_p": 0.1, "loss_num_prototypes": 0.1, "cluster_loss": 0.1, "seperation_loss": 0.1}', type=json.loads, help='原型损失权重字典的字符串表示')
+    parser.add_argument('--transformer_dim', default=256, type=int, help='Transformer层的维度')
+    parser.add_argument('--transformer_layers', default=2, type=int, help='Transformer层的数量')
+    parser.add_argument('--transformer_heads', default=4, type=int, help='Transformer头部的数量')
+    parser.add_argument('--transformer_dropout', default=0.1, type=float, help='Transformer的dropout率')
+    parser.add_argument('--fc_output_dim', default=128, type=int, help='全连接层的输出维度')
+    parser.add_argument('--mlp_hidden_dim', default=64, type=int, help='MLP的隐藏层维度')
+    parser.add_argument('--mlp_output_dim', default=2, type=int, help='MLP的输出维度')
+    parser.add_argument('--mlp_num_layers', default=2, type=int, help='MLP的层数')
+    parser.add_argument('--mlp_dropout', default=0.1, type=float, help='MLP的dropout率')
+
+    return parser.parse_args() #调用parse_args方法解析参数
 
 def main():
     args=set_args()
@@ -240,7 +257,8 @@ def main():
     # state_dict['bert.embeddings.token_type_embedding.weight']=torch.tensor(c)
     # model_config=BertConfig.from_json_file(config_path)
     # model=BertTorchClassfication.from_pretrained(None,config=config_path,state_dict=state_dict)
-    model=BertTorchClassfication.from_pretrained(args.pretrained_model_path)
+    # model=BertTorchClassfication.from_pretrained(args.pretrained_model_path)
+    
     #实例化tokenizer
     tokenizer=BertTokenizer.from_pretrained(args.vocab_path,do_lower_case=True)
     for i in range(1,100):
@@ -248,6 +266,8 @@ def main():
     #创建模型的输出目录
     if not os.path.exists(args.output_dir):
         os.mkdir(args.output_dir)
+        
+    model = Bert_Prototype(args.bert_model_path, args.bert_config, args.bert_cls_dim, args.prototype_dim, args.num_prototypes, args.prototype_threshold, args.prototype_loss_weights, args.transformer_dim, args.transformer_layers, args.transformer_heads, args.transformer_dropout, args.fc_output_dim, args.mlp_hidden_dim, args.mlp_output_dim, args.mlp_num_layers, args.mlp_dropout)
     #开始训练
     train(model,device,tokenizer,args)
 
