@@ -1,6 +1,7 @@
 
 import torch
 import os
+import pandas as pd
 from tqdm import tqdm
 from torch.utils.data import Dataset
 import logging
@@ -42,20 +43,22 @@ class SacasamDetection(Dataset):
         :return:
         '''
         self.data_set=[]
-        with open(path_file,"r",encoding='utf-8') as fh:
-            for idx,line in enumerate(tqdm(fh,desc='iter',disable=False)):
-                sample=line.strip('\n').split('\t')
-                sentence=sample[1]
-                label=int(sample[0])
-                if len(sentence)>500:
-                    continue
+        df = pd.read_csv(path_file, encoding='utf-8-sig')
+        for index, row in df.iterrows():
+            sentence=row['text']
+            label=int(row['sarcastic'])
+            try: 
                 input_ids,token_type_ids,position_ids,attention_mask=self.convert_feature(sentence)
+                if len(input_ids)>500:
+                    continue
                 self.data_set.append({"text":sentence,
-                                      "input_ids":input_ids,
-                                      "token_type_ids":token_type_ids,
-                                      "attention_mask":attention_mask,
-                                      "position_ids":position_ids,
-                                      "label":label})
+                                    "input_ids":input_ids,
+                                    "token_type_ids":token_type_ids,
+                                    "attention_mask":attention_mask,
+                                    "position_ids":position_ids,
+                                    "label":label})
+            except:
+                pass
         return self.data_set
 
     def convert_feature(self,sentence):
@@ -64,10 +67,8 @@ class SacasamDetection(Dataset):
         :param sample: 输入的每个文本
         :return:
         '''
-        sentence_tokens=[i for i in sentence]
-        tokens=['[CLS]']+sentence_tokens+['[SEP]']
-        input_ids=self.tokenizer.convert_tokens_to_ids(tokens)
-        token=self.tokenizer.convert_id_to
+        sentence_tokens = self.tokenizer.tokenize(sentence)
+        input_ids=self.tokenizer.convert_tokens_to_ids(sentence_tokens)
         token_type_ids=[0]*len(input_ids)
         position_ids=[s for s in range(len(input_ids))]
         attention_mask=[1]*len(input_ids)
